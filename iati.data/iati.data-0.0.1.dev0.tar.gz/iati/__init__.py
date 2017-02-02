@@ -1,0 +1,2 @@
+def data():
+    return NotImplemented
