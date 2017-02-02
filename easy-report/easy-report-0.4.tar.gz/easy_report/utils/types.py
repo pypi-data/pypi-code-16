@@ -1,0 +1,6 @@
+TABLE = 0
+NORMAL = 1
+GRAPH = 2
+CUSTOM = 3
+
+choices = (TABLE, NORMAL, GRAPH, CUSTOM)
