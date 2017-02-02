@@ -1,0 +1,128 @@
+import unittest as unittest
+import serial
+import os
+import time
+try:
+    from unittest import mock
+except ImportError:
+    import mock
+
+from pv_logger import logger as pvlogger
+
+pvlogger.Config.config['inverter_type'] = ['kaco']
+
+class HighlevelTest(unittest.TestCase):
+    def get_rows(self):
+        rows = pvlogger.sqlite.session.query(pvlogger.sqlite.History).all()
+        rows_converted = [pvlogger.sqlite.history_to_dict(row) for row in rows]
+        for item in rows_converted:
+            print("row in db", item)
+
+        return rows_converted
+
+    def remove_all_rows(self):
+        pvlogger.sqlite.session.query(pvlogger.sqlite.History).delete()
+
+    def test_loop(self):
+        pvlogger.main_loop()
+
+        rows = self.get_rows()
+        self.remove_all_rows()
+
+        self.assertEqual(rows[0]['fields']['last_request_status'], 'error')
+        self.assertEqual(len(rows), 2)
+
+        module_loaded = ('kaco.py' in repr(rows[0]['fields']))
+        self.assertEqual(module_loaded, True)
+
+
+    @mock.patch('serial.Serial', spec=serial.Serial)
+    def test_answers(self, serial_mock):
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        pvlogger.Config.config['kaco_port'] = os.path.join(dir_path, 'test_ttyUSB*')
+
+        # reset mock state
+        self.serial_mock_in_waiting_index = 0
+        self.serial_mock_return_index = 0
+
+        instance = serial_mock.return_value
+        instance.inWaiting.side_effect = self.serial_mock_in_waiting
+        instance.readline.side_effect = self.serial_mock_return
+
+        pvlogger.main_loop()
+
+        rows = self.get_rows()
+        self.remove_all_rows()
+
+        # assume that if 3 answers and one status is written
+        # everything was working
+        self.assertEqual(len(rows), 5)
+
+    @mock.patch('serial.Serial', spec=serial.Serial)
+    def test_answers_sometimes(self, serial_mock):
+        """check if inverter answers sometimes and watchdog is set correctly"""
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        pvlogger.Config.config['kaco_port'] = os.path.join(dir_path, 'test_ttyUSB*')
+        pvlogger.Config.config['checks']['port_found']['interval_seconds'] = 0.1
+
+        # reset mock state
+        self.serial_mock_in_waiting_index = 0
+        self.serial_mock_return_index = 0
+
+        self.remove_all_rows()
+
+
+        # run twice
+        for i in range(1,3):
+            pvlogger.main_loop()
+            rows = self.get_rows()
+            self.remove_all_rows()
+
+            # one for no inverter answer, one for no communication to influx
+            self.assertEqual(len(rows), 2)
+
+        # now fail
+        # TODO: fail not working
+        # TODO: reproduce issue of pv_strass!!!
+        #
+        time.sleep(0.4)
+        pvlogger.Config.config['kaco_port'] = '/tmp/not-here-asdfasdf'
+
+        pvlogger.main_loop()
+        rows = self.get_rows()
+        self.remove_all_rows()
+
+        # one for no inverter answer, one for no communication to influx
+        self.assertEqual(len(rows), 2)
+
+
+
+    def serial_mock_in_waiting(self):
+        """return 1 or 0 based on number of calls"""
+        # each inverter will be asked 2 questions
+        # all together are 2*num of inverters
+        should_return = [1, 0]*6
+
+        index = self.serial_mock_in_waiting_index
+        self.serial_mock_in_waiting_index += 1
+
+        if index > len(should_return) - 1:
+            return 0
+        else:
+            return should_return[index]
+
+    def serial_mock_return(self):
+        """return answer based on number of calls"""
+        should_return = [
+            '*010 4 585.9 10.17 5958 229.5 24.90 5720 36 17614 d 9600I',
+            '2286 4184 42 581 8:46 11:04 11:04',
+            '*020 4 585.9 10.17 5958 229.5 24.90 5720 36 17614 d 9600I',
+            '2286 4184 42 581 8:46 11:04 11:04',
+            '*030 4 585.9 10.17 5958 229.5 24.90 5720 36 17614 d 9600I',
+            '2286 4184 42 581 8:46 11:04 11:04',
+        ]
+
+        index = self.serial_mock_return_index
+        self.serial_mock_return_index += 1
+
+        return should_return[index]
