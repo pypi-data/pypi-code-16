@@ -1,0 +1,15 @@
+from mastercardapicore import *
+
+# import apis resourceconfig
+from mastercarddisbursements.resourceconfig import *
+
+
+# import apis into api package
+from mastercarddisbursements.accountinfo import *
+from mastercarddisbursements.accountverification import *
+from mastercarddisbursements.consumer import *
+from mastercarddisbursements.consumeraccount import *
+from mastercarddisbursements.consumercontactid import *
+from mastercarddisbursements.consumergovernmentid import *
+from mastercarddisbursements.disbursement import *
+from mastercarddisbursements.sanctionscreening import *
