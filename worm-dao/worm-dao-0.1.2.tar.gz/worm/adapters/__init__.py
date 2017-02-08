@@ -1,0 +1,1 @@
+from .genericsql import GenericSQLAdapter
