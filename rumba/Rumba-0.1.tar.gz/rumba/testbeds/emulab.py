@@ -1,0 +1,244 @@
+#
+# Emulab support for Rumba
+#
+#    Sander Vrijders  <sander.vrijders@intec.ugent.be>
+#    Wouter Tavernier <wouter.tavernier@intec.ugent.be>
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+# MA  02110-1301  USA
+
+import os
+import time
+import re
+from ast import literal_eval
+
+import rumba.ssh_support as ssh
+from rumba.model import Testbed
+
+import warnings
+warnings.filterwarnings("ignore")
+
+# Represents an emulab testbed info
+#
+# @url [string] URL of the testbed
+# @image [string] specific image to use
+#
+class EmulabTestbed(Testbed):
+    def __init__(self, exp_name, username, password = "",
+                 proj_name  = "ARCFIRE", url = "wall1.ilabt.iminds.be",
+                 image = "UBUNTU14-64-STD"):
+        Testbed.__init__(self, exp_name, username, password, proj_name)
+        self.url = url
+        self.image = image
+
+    def ops_server(self):
+        '''
+        Return server name of the ops-server (is testbed specific)
+
+        @param self: testbed info
+
+        @return: server name of the ops-server
+        '''
+        return 'ops.' + self.url
+
+    def full_name(self, node_name):
+        '''
+        Return server name of a node
+
+        @param node_name: name of the node
+        @param self: testbed info
+
+        @return: server name of the node
+        '''
+        return node_name + '.' + self.exp_name + '.' + \
+            self.proj_name + '.' + self.url
+
+    def get_experiment_list(self, project_name = None):
+        '''
+        Get list of made emulab experiments accessible with your credentials
+
+        @param self: testbed info
+        @param project_name: optional filter on project
+
+        @return: list of created experiments (strings)
+        '''
+        cmd = '/usr/testbed/bin/sslxmlrpc_client.py -m experiment getlist'
+        out = ssh.execute_command(self, self.ops_server(), cmd)
+
+        try:
+            if project_name != None:
+                return  literal_eval(out)[project_name][project_name]
+            else:
+                return  literal_eval(out)
+        except:
+            return { project_name: { project_name: [] }}
+
+    def swap_exp_in(self):
+        '''
+        Swaps experiment in
+
+        @param self: testbed info
+        '''
+        cmd = '/usr/testbed/bin/sslxmlrpc_client.py swapexp proj=' + \
+              self.proj_name + \
+              ' exp=' + \
+              self.exp_name + \
+              ' direction=in'
+
+        output = ssh.execute_command(self, self.ops_server(), cmd)
+
+        return output
+
+    def _create_experiment(self, nodes, links):
+        '''
+        Creates an emulab experiment
+
+        @param self: testbed info
+        @param nodes: holds the nodes in the experiment
+        @param links: holds the links in the experiment
+        '''
+        proj_name = self.proj_name
+        exp_name = self.exp_name
+
+        exp_list = self.get_experiment_list()
+
+        try:
+            if exp_name in exp_list[proj_name][proj_name]:
+                print("Experiment already exists.")
+                return
+        except:
+            print("First experiment to be created for that project.")
+
+        ns = self.generate_ns_script(nodes, links)
+        dest_file_name = '/users/'+ self.username + \
+                         '/temp_ns_file.%s.ns' % os.getpid()
+        ssh.copy_file_to_testbed(self, self.ops_server(), ns, dest_file_name)
+
+        cmd = '/usr/testbed/bin/sslxmlrpc_client.py startexp ' + \
+              'batch=false wait=true proj="' + proj_name + \
+              '" exp="' + exp_name + '" noswapin=true ' + \
+              'nsfilepath="' + dest_file_name + '"'
+
+        ssh.execute_command(self, self.ops_server(), cmd, time_out = None)
+        ssh.execute_command(self, self.ops_server(),'rm ' + dest_file_name)
+        print("New experiment succesfully created.")
+
+    def generate_ns_script(self, nodes, p2plinks):
+        '''
+        Generate ns script based on network graph.
+        Enables to customize default node image.
+
+        @param nodes: holds the nodes in the experiment
+        @param links: holds the links in the experiment
+        @param self: testbed info
+
+        @return: ns2 script for Emulab experiment
+        '''
+
+        ns2_script = "# ns script generated by Rumba\n"
+        ns2_script += "set ns [new Simulator]\n"
+        ns2_script += "source tb_compat.tcl\n"
+
+        for node in nodes:
+                ns2_script += "set " + node.name + " [$ns node]\n"
+                ns2_script += "tb-set-node-os $" + node.name + " " + \
+                              self.image + "\n"
+
+        for link in p2plinks:
+                ns2_script += "set " + link.name + \
+                              " [$ns duplex-link $" + \
+                              link.node_a.name + " $" + \
+                              link.node_b.name + " 1000Mb 0ms DropTail]\n"
+
+        ns2_script += "$ns run\n"
+
+        return ns2_script
+
+    def wait_until_nodes_up(self):
+        '''
+        Checks if nodes are up
+
+        @param self: testbed info
+        '''
+        print("Waiting until all nodes are up")
+
+        cmd = '/usr/testbed/bin/script_wrapper.py expinfo -e' + \
+              self.proj_name + \
+              ',' + \
+              self.exp_name + \
+              ' -a | grep State | cut -f2,2 -d " "'
+
+        res = ssh.execute_command(self, self.ops_server(), cmd)
+        active = False
+        if res == "active":
+            active = True
+        while active != True:
+            res = ssh.execute_command(self, self.ops_server(), cmd)
+            if res == "active":
+                active = True
+            print("Still waiting")
+            time.sleep(5)
+
+    def complete_experiment_graph(self, nodes, p2plinks):
+        '''
+        Gets the interface (ethx) to link mapping
+
+        @param self: testbed info
+        @param nodes: holds the nodes in the experiment
+        @param links: holds the links in the experiment
+        '''
+
+        node_full_name = full_name(self, nodes[0].name)
+        cmd = 'cat /var/emulab/boot/topomap'
+        topomap = ssh.execute_command(self, node_full_name, cmd)
+        # Almost as ugly as yo momma
+        index = topomap.rfind("# lans")
+        topo_array = topomap[:index].split('\\n')[1:-1]
+        # Array contains things like 'r2b1,link7:10.1.6.3 link6:10.1.5.3'
+        for item in topo_array:
+            item_array = re.split(',? ?', item)
+            node_name = item_array[0]
+            for item2 in item_array[1:]:
+                item2 = item2.split(':')
+                link_name = item2[0]
+                link_ip = item2[1]
+                for link in p2plinks:
+                    if link.name == link_name:
+                        if link.node_a.name == node_name:
+                            link.int_a.ip = link_ip
+                        elif link.node_b.name == node_name:
+                            link.int_b.ip = link_ip
+
+        for node in nodes:
+            cmd = 'cat /var/emulab/boot/ifmap'
+            node_full_name  = full_name(self, node.name)
+            output = ssh.execute_command(self, node_full_name, cmd)
+            output = re.split('\\\\n', output)
+            for item in output:
+                item = item.split()
+                for link in p2plinks:
+                    if link.node_a.name == node.name and \
+                       link.int_a.ip == item[1]:
+                        link.int_a.name = item[0]
+                    elif link.node_b.name == node.name and \
+                         link.int_b.ip == item[1]:
+                        link.int_b.name =  item[0]
+            node.full_name = self.full_name(node.name)
+
+    def create_experiment(self, nodes, links):
+        self._create_experiment(nodes, links)
+        self.swap_exp_in()
+        self.wait_until_nodes_up()
+        es.complete_experiment_graph(nodes, links)
