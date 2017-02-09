@@ -1,0 +1,8 @@
+"""
+
+    EVRM
+
+"""
+
+__version__ = 14
+__txt__ = "ANTIPSYCHOTICA - AKATHISIA - KATATONIE - SEDERING - SHOCKS - LETHALE KATATONIE !!!"
