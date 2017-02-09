@@ -1,0 +1,10 @@
+# coding=utf-8
+
+DEBUG = True
+
+SITE_IP = '0.0.0.0'
+
+APP_HOST_IP = "127.0.0.1"
+APP_HOST_PORT = 8100
+
+SQLALCHEMY_DATABASE_URI = ''
