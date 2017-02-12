@@ -1,0 +1,3 @@
+
+class ExceptionInterface(Exception):
+    pass
