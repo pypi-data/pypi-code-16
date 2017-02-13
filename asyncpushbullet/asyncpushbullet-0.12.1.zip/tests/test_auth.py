@@ -1,0 +1,15 @@
+import os
+
+import pytest
+import asyncpushbullet
+
+API_KEY = os.environ["PUSHBULLET_API_KEY"]
+
+def test_auth_fail():
+    with pytest.raises(asyncpushbullet.InvalidKeyError) as exinfo:
+        pb = asyncpushbullet.Pushbullet("faultykey")
+
+
+def test_auth_success():
+    pb = asyncpushbullet.Pushbullet(API_KEY)
+    assert pb.user_info["name"] == os.environ.get("PUSHBULLET_NAME", "Pushbullet Tester")
