@@ -1,0 +1,11 @@
+__version__ = "1.0"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = u'develop'
+__git_remote_tracking_branch__ = u'origin/develop'
+__git_remote_url__ = u'git@git.infinidat.com:host-opensource/infi.winver.git'
+__git_head_hash__ = '429306ad373807b578fc7f62cf46ce4cf88fc4c4'
+__git_head_subject__ = u'Finished Release v1.0'
+__git_head_message__ = u'* develop:\n  HOSTDEV-2616 - bug fix\n  HOSTDEV-2615 - workaround to differentiate between 2012 and 2016\n  HOSTDEV-2612 - added win 2016 and win 10'
+__git_dirty_diff__ = u''
+__git_commit_date__ = '2017-02-13 17:47:08'
