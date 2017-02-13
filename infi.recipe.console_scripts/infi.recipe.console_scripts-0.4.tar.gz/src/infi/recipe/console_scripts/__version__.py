@@ -1,0 +1,11 @@
+__version__ = "0.4"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = u'develop'
+__git_remote_tracking_branch__ = u'origin/develop'
+__git_remote_url__ = u'git@git.infinidat.com:host-opensource/infi.recipe.console_scripts'
+__git_head_hash__ = 'baaf84166065515e33effda6ee6fab857e3fdcc3'
+__git_head_subject__ = u'Finished Release v0.4'
+__git_head_message__ = u'* develop:\n  HOSTDEV-2618 fixing minimal packages\n  HOSTDEV-2622 fixing indentation issues in bin/python\n  HOSTDEV-2622 dont use virtualenv python packages in IPython\n  HPT-1640 - added win10 / 2016 os id to mainfaist'
+__git_dirty_diff__ = u''
+__git_commit_date__ = '2017-02-13 17:48:15'
