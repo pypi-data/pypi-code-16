@@ -1,0 +1,47 @@
+import tecplot
+from tecplot.constant import *
+import os
+
+examples_dir = tecplot.session.tecplot_examples_directory()
+datafile = os.path.join(examples_dir, 'OneraM6wing', 'OneraM6_SU2_RANS.plt')
+ds = tecplot.data.load_tecplot(datafile)
+
+frame = tecplot.active_frame()
+plot = frame.plot()
+
+# Set Isosurface to match Contour Levels of the first group. 
+iso = plot.isosurface(0)
+iso.isosurface_selection = IsoSurfaceSelection.AllContourLevels
+cont = plot.contour(0)
+iso.definition_contour_group = cont
+cont.colormap_name = 'Magma'
+
+# Setup definition Isosurface layers 
+cont.variable = ds.variable('Mach')
+cont.levels.reset_levels( [.95,1.0,1.1,1.4])
+print(list(cont.levels))
+
+# Turn on Translucency
+iso.effects.use_translucency = True
+iso.effects.surface_translucency = 80
+
+# Turn on Isosurfaces
+plot.show_isosurfaces = True
+iso.show = True
+
+cont.legend.show = False
+tecplot.macro.execute_command("""$!THREEDVIEW 
+  PSIANGLE = 65.777
+  THETAANGLE = 166.415
+  ALPHAANGLE = -1.05394
+  VIEWERPOSITION
+    {
+    X = -23.92541680486183
+    Y = 101.8931504712126
+    Z = 47.04269529295333
+    }
+  VIEWWIDTH = 1.3844""")
+
+tecplot.export.save_png("wing_iso.png",width=600, supersample=4)
+
+
