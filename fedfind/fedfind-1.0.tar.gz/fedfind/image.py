@@ -1,0 +1,160 @@
+#!/bin/python2
+
+# Copyright (C) 2015 Red Hat
+#
+# This file is part of fedfind.
+#
+# fedfind is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Author: Adam Williamson <awilliam@redhat.com>
+#
+# This file defines the Image class used to represent images.
+
+import datetime
+import fedfind.const
+import fedfind.helpers
+
+
+class Image(object):
+    """A representation of a Fedora image. Must be given at least one
+    of 'url' or 'path'. 'url' is an absolute URL to a Fedora image.
+    'path' is a path relative to the top level of the Fedora mirror
+    system - /pub on the master mirror - so if an instance has a 'path'
+    attribute,
+    https://mirrors.fedoraproject.org/mirrorlist?path=pub/(path) should
+    work. If only 'path' is given, 'url' will be set to the expected
+    URL for the image using the https://download.fedoraproject.org/
+    redirector. If only 'url' is given, we will figure out 'path' only
+    if the URL uses dl.fedoraproject or download.fedoraproject.
+
+    url is used as the string representation, so the string for an
+    Image instance should usually be a valid link to download it.
+
+    If both 'url' and 'path' are passed, self.path and self.url will
+    both be set, and on your own head be it if for some reason they're
+    entirely different. I can't think of a good reason to do this.
+
+    If given only 'url' and/or 'path', will attempt to figure out
+    various attributes of the image. Most of the attributes can
+    also be overridden at instantiation time, so if you know any of
+    them for sure, you can just set them and avoid the guesswork.
+
+    Really should be given a valid HTTPS URL or Fedora mirror system
+    path. You may be able to get useful results in some sense by
+    passing something else as url and/or path (e.g. a filesystem path),
+    but it's not really expected. Can be used fairly independently of
+    the rest of fedfind if you just want to use it to figure out some
+    attributes of an arbitrary Fedora image.
+    """
+    def __init__(self, url='', path='', arch='', imagetype='', flavor='',
+                 subflavor='', loadout='', date='', release='', milestone='',
+                 compose=''):
+        if (not url and not path):
+            raise TypeError("fedfind.Image() needs url or path.")
+        self.url = url
+        if not url:
+            self.url = '{}/{}'.format(fedfind.const.HTTPS, path)
+        self.path = path
+        if not path:
+            for pfx in fedfind.const.KNOWN_PREFIXES:
+                if url.startswith(pfx):
+                    self.path = url.replace(pfx, '', 1)
+        self.filename = self.url.split('/')[-1]
+        self.arch = arch
+        self.imagetype = imagetype
+        self.flavor = flavor
+        self.subflavor = subflavor
+        self.loadout = loadout
+        self.payload = ''
+        self.date = date
+        self.release = release
+        self.milestone = milestone
+        self.compose = compose
+
+        # attempt to figure out unspecified attributes.
+        checkurl = self.url.lower()
+        checkfile = self.filename.lower()
+        if not arch:
+            for arch in fedfind.const.ARCHES:
+                if arch in checkurl:
+                    self.arch = arch
+
+        if not imagetype:
+            if checkfile == 'boot.iso':
+                self.imagetype = 'boot'
+            fileext = '.{}'.format(checkfile.split('.', 1)[1])
+            if fileext in fedfind.const.ISO_EXTS:
+                for isotype in fedfind.const.ISO_TYPES:
+                    if isotype in checkurl:
+                        self.imagetype = isotype
+            elif fileext in fedfind.const.DISK_EXTS:
+                self.imagetype = 'disk'
+            elif fileext in fedfind.const.DOCKER_EXTS:
+                self.imagetype = 'docker'
+
+        if not flavor and not loadout:
+            for (flavor, attrs) in fedfind.const.FLAVORS.items():
+                for name in attrs['names']:
+                    if name in checkurl:
+                        self.flavor = flavor
+                        if 'subs' in attrs:
+                            for sub in attrs['subs']:
+                                if '{}-{}'.format(name, sub) in checkurl:
+                                    self.subflavor = sub
+            for (loadout, attrs) in fedfind.const.LOADOUTS.items():
+                for name in attrs['names']:
+                    if name in checkurl:
+                        self.loadout = name
+
+        if self.flavor:
+            self.payload = self.flavor
+        elif self.loadout:
+            self.payload = self.loadout
+
+        elems = checkfile.split('.')[0].split('-')
+        for elem in elems:
+            # We want to capture the *first* matching element, so we get
+            # '21' not '5' for Fedora-Live-Workstation-x86_64-21-5.iso
+            if (elem.isdigit()
+                and int(elem) in range(0, 100)
+                and not self.release):
+                self.release = elem
+            try:
+                datetime.datetime.strptime(elem, '%Y%m%d')
+                if not self.date:
+                    self.date = elem
+            except:
+                pass
+
+    def __str__(self):
+        return self.url
+
+    def __repr__(self):
+        return ("{}(url='{}', path='{}', arch='{}', imagetype='{}', "
+                 "flavor='{}', subflavor='{}', loadout='{}', date='{}', "
+                 "release='{}')").format(
+                self.__class__, self.url, self.path, self.arch, self.imagetype,
+                self.flavor, self.subflavor, self.loadout, self.date,
+                self.release)
+
+    @property
+    def exists(self):
+        """Does the image in question actually exist? Try and access
+        it and find out. If self.path is set it **MUST** be the path
+        relative to the top level of the mirror system. If path is not
+        set, url must be a complete https or rsync URL."""
+        if self.path:
+            rsync = '{}/{}'.format(fedfind.const.RSYNC, self.path)
+            return fedfind.helpers.url_exists(rsync)
+        return fedfind.helpers.url_exists(self.url)
