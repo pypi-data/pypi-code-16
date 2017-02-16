@@ -1,0 +1,204 @@
+'''
+trimesh.py
+
+Library for importing and doing simple operations on triangular meshes.
+'''
+
+import numpy as np
+
+from .constants import tol, log
+from . import util
+from . import triangles
+
+
+try:
+    from scipy import spatial
+except ImportError:
+    log.warning('Scipy import failed!')
+
+
+def convex_hull(obj):
+    '''
+    Get a new Trimesh object representing the convex hull of the
+    current mesh, with proper normals and watertight. 
+    Requires scipy >.12.
+
+    Argments
+    --------
+    obj: Trimesh object OR 
+         (n,3) float, cartesian points
+
+    Returns
+    --------
+    convex: Trimesh object of convex hull
+    '''
+    from .base import Trimesh
+    if isinstance(obj, Trimesh):
+        points = obj.vertices.view(np.ndarray)
+    else:
+        points = np.asanyarray(obj, dtype=np.float64)
+        if not util.is_shape(points, (-1, 3)):
+            raise ValueError('Object must be Trimesh or (n,3) points!')
+    c = spatial.ConvexHull(points.reshape((-1, 3)),
+                           qhull_options='QbB Pp')
+
+    # get the vertices and faces from the hull object
+    # remove unreferenced vertices here
+    vid = np.sort(c.vertices)
+    mask = np.zeros(len(c.points), dtype=np.int64)
+    mask[vid] = np.arange(len(vid))
+    faces = mask[c.simplices].copy()
+    vertices = c.points[vid].copy()
+
+    # qhull returns faces with random winding
+    # calculate the returned normal of each face
+    crosses = triangles.cross(vertices[faces])
+    normals, valid = triangles.normals(crosses=crosses)
+
+    faces = faces[valid]
+    crosses = crosses[valid]
+    triangles_area = triangles.area(crosses=crosses, sum=False)
+    triangles_center = vertices[faces].mean(axis=1)
+
+    # since the convex hull is convex, the vector from the centroid to a vertex
+    # should have a positive dot product with that faces normal
+    # if it doesn't it is probably backwards
+    # note that this sometimes gets screwed up by precision issues
+    centroid = np.average(triangles_center,
+                          weights=triangles_area,
+                          axis=0)
+    test_vector = vertices[faces[:, 0]] - centroid
+    backwards = util.diagonal_dot(normals,
+                                  test_vector) < 0.0
+
+    # flip the winding and normals to be outward facing
+    faces[backwards] = np.fliplr(faces[backwards])
+    normals[backwards] *= -1.0
+
+    # save the work we did to the cache so it doesn't have to be recomputed
+    initial_cache = {'triangles_cross': crosses,
+                     'triangles_center': triangles_center,
+                     'area_faces': triangles_area,
+                     'centroid': centroid}
+
+    convex = Trimesh(vertices=vertices,
+                     faces=faces,
+                     face_normals=normals,
+                     initial_cache=initial_cache,
+                     process=True)
+
+    # we did the gross case above, but sometimes precision issues
+    # leave some faces backwards anyway
+    # this call will exit early if the winding is consistent
+    # and if not will (slowly) fix it by traversing the adjacency graph
+    convex.fix_normals()
+
+    return convex
+
+
+def is_convex(mesh, chunks=None):
+    '''
+    Test if a mesh is convex by projecting the vertices of
+    a triangle onto the normal of its adjacent face.
+
+    Arguments
+    ----------
+    mesh: Trimesh object
+
+    Returns
+    ----------
+    convex: bool, is the mesh convex or not
+    '''
+    chunk_block = 5e4
+    if chunks is None:
+        chunks = int(np.clip(len(mesh.faces) / chunk_block, 1, 10))
+
+    # triangles from the second column of face adjacency
+    #triangles = mesh.triangles.copy()[mesh.face_adjacency[:, 1]]
+    # normals and origins from the first column of face adjacency
+    normals = mesh.face_normals[mesh.face_adjacency[:, 0]]
+    origins = mesh.vertices[mesh.face_adjacency_edges[:, 0]]
+
+    triangles = (mesh.triangles_center[mesh.face_adjacency[:, 1]] -
+                 mesh.triangles_center[mesh.face_adjacency[:, 0]])
+
+    # in non- convex meshes, we don't necessarily have to compute all
+    # dots of every face since we are looking for logical ALL
+    for chunk_tri, chunk_norm in zip(np.array_split(triangles, chunks),
+                                     np.array_split(normals, chunks)):
+        # project vertices of adjacent triangle onto normal
+        # note that two of these are always going to be zero so we
+        # are doing more dot products than we really have to but finding
+        # the index of the the third vertex through graph op is way slower
+        # than doing extra dot products.
+        # there is probably a clever way to use the winding to get this forfree
+        dots = util.diagonal_dot(chunk_tri, chunk_norm)
+        # if all projections are negative, or 'behind' the triangle
+        # the mesh is convex
+        if (dots > tol.merge * mesh.scale).any():
+            return False
+    return True
+
+
+def planar_hull(points, normal, origin=None, input_convex=False):
+    '''
+    Find the convex outline of a set of points projected to a plane.
+
+    Arguments
+    -----------
+    points: (n,3) float, input points
+    normal: (3) float vector, normal vector of plane
+    origin: (3) float, location of plane origin
+    input_convex: bool, if True we assume the input points are already from
+                  a convex hull which provides a speedup.
+
+    Returns
+    -----------
+    hull_lines: (n,2,2) set of unordered line segments
+    T:          (4,4) float, transformation matrix
+    '''
+    from .points import project_to_plane
+
+    if origin is None:
+        origin = np.zeros(3)
+    if not input_convex:
+        pass
+    planar, T = project_to_plane(points,
+                                 plane_normal=normal,
+                                 plane_origin=origin,
+                                 return_planar=False,
+                                 return_transform=True)
+    hull_edges = spatial.ConvexHull(planar[:, 0:2]).simplices
+    hull_lines = planar[hull_edges]
+    planar_z = planar[:, 2]
+    height = np.array([planar_z.min(),
+                       planar_z.max()])
+    return hull_lines, T, height
+
+
+def hull_points(obj):
+    '''
+    Try to extract a convex set of points from multiple input formats.
+
+    Arguments
+    ---------
+    obj: Trimesh object
+         (n,d) points
+         (m,) Trimesh objects
+
+    Returns
+    --------
+    points: (o,d) convex set of points
+    '''
+    if hasattr(obj, 'convex_hull'):
+        points = obj.convex_hull.vertices
+    elif util.is_sequence(obj):
+        initial = np.asanyarray(obj)
+        if len(initial.shape) != 2:
+            raise ValueError('Points must be (n, dimension)!')
+        hull = spatial.ConvexHull(initial, qhull_options='QbB Pp')
+        points = hull.points[hull.vertices]
+    else:
+        raise ValueError('Can\'t extract hull points from %s',
+                         obj.__class__.__name__)
+    return points
