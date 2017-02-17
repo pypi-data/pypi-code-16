@@ -1,0 +1,1 @@
+from collect_results_chainer import collect_results_chainer, collect_results_chainer_interactive
