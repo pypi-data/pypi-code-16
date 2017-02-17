@@ -1,0 +1,229 @@
+# -*- coding: utf-8 -*-
+
+from setuptools import setup
+from distutils.cmd import Command
+from distutils import sysconfig
+from distutils.extension import Extension
+import os
+import sys
+import io
+import subprocess
+import glob
+import numpy as np
+from Cython.Build import cythonize
+import Cython.Compiler.Options
+Cython.Compiler.Options.annotate = True
+
+if "--line_trace" in sys.argv:
+    line_trace = True
+    print("Build with line trace enabled ...")
+    sys.argv.remove("--line_trace")
+else:
+    line_trace = False
+
+PACKAGE = "PyFin"
+NAME = "Finance-Python"
+VERSION = "0.5.1"
+DESCRIPTION = "PyFin " + VERSION
+AUTHOR = "cheng li"
+AUTHOR_EMAIL = "wegamekinglc@hotmail.com"
+URL = 'https://github.com/ChinaQuants/Finance-Python'
+
+packagePath = sysconfig.get_python_lib()
+
+files = glob.glob("PyFin/tests/Math/Accumulators/data/*.csv")
+datafiles = [
+    (os.path.join(packagePath, "PyFin/tests/Math/Accumulators/data"), files)]
+
+files = glob.glob("PyFin/tests/POpt/data/*.csv")
+datafiles.append((os.path.join(packagePath, "PyFin/tests/POpt/data"), files))
+
+files = glob.glob("PyFin/DateUtilities/*.pxd")
+datafiles.append((os.path.join(packagePath, "PyFin/DateUtilities"), files))
+
+files = glob.glob("PyFin/Analysis/*.pxd")
+datafiles.append((os.path.join(packagePath, "PyFin/Analysis"), files))
+
+files = glob.glob("PyFin/Enums/*.pxd")
+datafiles.append((os.path.join(packagePath, "PyFin/Enums"), files))
+
+files = glob.glob("PyFin/Math/*.pxd")
+datafiles.append((os.path.join(packagePath, "PyFin/Math"), files))
+
+files = glob.glob("PyFin/Utilities/*.pxd")
+datafiles.append((os.path.join(packagePath, "PyFin/Utilities"), files))
+
+files = glob.glob("PyFin/Math/Accumulators/*.pxd")
+datafiles.append((os.path.join(packagePath, "PyFin/Math/Accumulators"), files))
+
+files = glob.glob("PyFin/Math/Distributions/*.pxd")
+datafiles.append((os.path.join(packagePath, "PyFin/Math/Distributions"), files))
+
+
+def git_version():
+    from subprocess import Popen, PIPE
+    gitproc = Popen(['git', 'rev-parse', 'HEAD'], stdout=PIPE)
+    (stdout, _) = gitproc.communicate()
+    return stdout.strip()
+
+
+class test(Command):
+    description = "test the distribution prior to install"
+
+    user_options = [
+        ('test-dir=', None,
+         "directory that contains the test definitions"),
+    ]
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        if sys.platform == 'win32':
+            command = "coverage run PyFin/tests/testSuite.py& coverage report& coverage html"
+        else:
+            command = "coverage run PyFin/tests/testSuite.py; coverage report; coverage html"
+        process = subprocess.Popen(command, shell=True)
+        process.wait()
+
+
+class version_build(Command):
+
+    description = "test the distribution prior to install"
+
+    user_options = [
+        ('test-dir=', None,
+         "directory that contains the test definitions"),
+    ]
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        git_ver = git_version()[:10]
+        configFile = 'PyFin/__init__.py'
+
+        file_handle = open(configFile, 'r')
+        lines = file_handle.readlines()
+        newFiles = []
+        for line in lines:
+            if line.startswith('__version__'):
+                line = line.split('+')[0].rstrip()
+                line = line + " + \"-" + git_ver + "\"\n"
+            newFiles.append(line)
+        file_handle.close()
+        os.remove(configFile)
+        file_handle = open(configFile, 'w')
+        file_handle.writelines(newFiles)
+        file_handle.close()
+
+if sys.version_info > (3, 0, 0):
+    requirements = "requirements/py3.txt"
+else:
+    requirements = "requirements/py2.txt"
+
+
+ext_modules = [
+    "PyFin/Analysis/SecurityValues.pyx",
+    "PyFin/Analysis/transformer.pyx",
+    "PyFin/Analysis/SecurityValueHolders.pyx",
+    "PyFin/Analysis/CrossSectionValueHolders.pyx",
+    "PyFin/Analysis/TechnicalAnalysis/StatefulTechnicalAnalysers.pyx",
+    "PyFin/Analysis/TechnicalAnalysis/StatelessTechnicalAnalysers.pyx",
+    "PyFin/Math/Accumulators/impl.pyx",
+    "PyFin/Math/Accumulators/IAccumulators.pyx",
+    "PyFin/Math/Accumulators/StatefulAccumulators.pyx",
+    "PyFin/Math/Accumulators/StatelessAccumulators.pyx",
+    "PyFin/Math/Distributions/NormalDistribution.pyx",
+    "PyFin/Math/Distributions/norm.pyx",
+    "PyFin/Math/ErrorFunction.pyx",
+    "PyFin/DateUtilities/Calendar.pyx",
+    "PyFin/DateUtilities/Date.pyx",
+    "PyFin/DateUtilities/Period.pyx",
+    "PyFin/Utilities/Asserts.pyx",
+    "PyFin/Utilities/Tools.pyx",
+    "PyFin/PricingEngines/BlackFormula.pyx",
+    "PyFin/PricingEngines/SabrFormulaImpl.pyx",
+    "PyFin/PricingEngines/SVIInterpolationImpl.pyx",
+    "PyFin/Enums/TimeUnits.pyx",
+    "PyFin/Enums/BizDayConventions.pyx",
+    "PyFin/Enums/DateGeneration.pyx",
+    "PyFin/Enums/Months.pyx",
+    "PyFin/Enums/NormalizingType.pyx",
+    "PyFin/Enums/OptionType.pyx",
+    "PyFin/Enums/Weekdays.pyx"
+]
+
+
+def generate_extensions(ext_modules, line_trace=False):
+
+    extensions = []
+
+    if line_trace:
+        print("define cython trace to True ...")
+        define_macros = [('CYTHON_TRACE', 1), ('CYTHON_TRACE_NOGIL', 1)]
+    else:
+        define_macros = []
+
+    for pyxfile in ext_modules:
+        ext = Extension(name='.'.join(pyxfile.split('/'))[:-4],
+                        sources=[pyxfile],
+                        define_macros=define_macros)
+        extensions.append(ext)
+    return extensions
+
+
+setup(
+    name=NAME,
+    version=VERSION,
+    description=DESCRIPTION,
+    author=AUTHOR,
+    author_email=AUTHOR_EMAIL,
+    url=URL,
+    packages=['PyFin.api',
+              'PyFin.examples',
+              'PyFin.DateUtilities',
+              'PyFin.Enums',
+              'PyFin.Env',
+              'PyFin.Math',
+              'PyFin.Math.Accumulators',
+              'PyFin.Math.Distributions',
+              'PyFin.Math.Timeseries',
+              'PyFin.Patterns',
+              'PyFin.POpt',
+              'PyFin.PricingEngines',
+              'PyFin.Analysis',
+              'PyFin.Analysis.DataProviders',
+              'PyFin.Analysis.TechnicalAnalysis',
+              'PyFin.Utilities',
+              'PyFin.tests',
+              'PyFin.tests.api',
+              'PyFin.tests.DateUtilities',
+              'PyFin.tests.Env',
+              'PyFin.tests.Math',
+              'PyFin.tests.Math.Accumulators',
+              'PyFin.tests.Math.Distributions',
+              'PyFin.tests.Math.Timeseries',
+              'PyFin.tests.POpt',
+              'PyFin.tests.Analysis',
+              'PyFin.tests.Analysis.DataProviders',
+              'PyFin.tests.Analysis.TechnicalAnalysis',
+              'PyFin.tests.PricingEngines',
+              'PyFin.tests.Utilities'],
+    py_modules=['PyFin.__init__', 'PyFin.tests.testSuite'],
+    install_requires=io.open(requirements, encoding='utf8').read(),
+    data_files=datafiles,
+    classifiers=[],
+    cmdclass={"test": test,
+              "version_build": version_build},
+    ext_modules=cythonize(generate_extensions(ext_modules, line_trace),
+                          compiler_directives={'embedsignature': True,
+                                               'linetrace': line_trace}),
+    include_dirs=[np.get_include()],
+)
