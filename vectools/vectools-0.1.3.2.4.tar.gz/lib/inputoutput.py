@@ -1,0 +1,563 @@
+import sys
+import numpy as np
+import argparse
+
+# Some functions make their totally new output matrices. # This constant gives the column name for row titles.
+# So that this will be consistent across all functions.
+COLUMN_TITLE_FOR_OUTPUT_MATRICES = "row_title"
+
+
+class ParseVectors:
+    """
+
+    This class needs to handle sever situations
+    1. Input of text stream
+    2. Input of file name
+
+    output
+    1. Output fully parsed matrix.
+    2. Output a generated matrix.
+
+    This function parses tsv files to a tupel of the containing matrix, col_titles, row_titles
+    :param filename: file to be parsed
+    :param col_names: if file contains a header. Default: false => None
+    :param row_names: if file contains row_titles. Default: false => None
+    :return: (matrix, col_titles, row_titles, type_of_matrix)
+    """
+
+    def __init__(self, file_name="",
+                 has_col_names=False,
+                 has_row_names=False,
+                 col_titles=None,
+                 row_titles=None,
+                 comment_character=None,
+                 delimiter="\t",
+                 only_apply_on_columns=None):
+
+        self.file_name = file_name
+
+        self.has_col_names = has_col_names
+
+        self.col_titles = col_titles
+
+        self.has_row_names = has_row_names
+
+        self.row_titles = row_titles
+
+        self.comment_character = comment_character
+
+        self.only_on = only_apply_on_columns
+        self.delimiter = delimiter
+        self.matrix = None
+        self.return_type = float
+
+        self._column_have_been_printed = False
+
+    def getcolumntitles(self):
+        """ @TODO: Add code here to parse the columns if matrix has not been parsed yet.
+        At the moment this will return none if the matrix has not been parsed yet.
+        Also check to see if  has cols or not.
+        :return:
+        """
+        return self.col_titles
+
+    def getrowtitles(self):
+        """ @TODO: Add code here to parse the row if matrix has not been parsed yet.
+        At the moment this will return none if the matrix has not been parsed yet.
+        Also check to see if  has rows or not.
+        :return:
+        """
+        return self.row_titles
+
+    def setcolumntitles(self, new_column_titles):
+        """ A simple set function to set the column titles.
+        :param new_column_titles:
+        :return:
+        """
+        # @TODO: Add some assert staments to validate input.
+        self.col_titles = new_column_titles
+
+    def __handleinput(self):
+
+        if self.file_name != 'sys.stdin':
+            file_obj = open(self.file_name)
+        else:
+            file_obj = sys.stdin
+        return file_obj
+
+    def parse(self):
+        """
+        Parse an entire vector file into a numpy array data structure.
+
+        :return:
+        """
+        file_obj = self.__handleinput()
+        matrix = []
+
+        if self.has_col_names:
+            self.col_titles = file_obj.readline().strip("\n").split(self.delimiter)
+
+        if self.has_row_names:
+            self.row_titles = []
+
+        for line in file_obj:
+            line_split = line.strip("\n").split(self.delimiter)
+
+            if self.has_row_names:
+
+                self.row_titles.append(line_split.pop(0))
+
+            matrix.append(line_split)
+
+        self.matrix = self._cast_matrix(np.array(matrix))
+
+        if self.file_name != 'sys.stdin':
+            file_obj.close()
+
+        return self.matrix  # , self.col_titles, self.row_titles, self.return_type
+
+    def generate(self, save_row_names=False, return_type=None):
+        """ This function is intended to handle parsing large files. As such the row title are not saved in the
+        main class, unless specifically told to do so by setting save_row_names to True.
+        Instead row titles are broadcasted in the Row class.
+
+        save_row_names: Row names will be saved in a list, allowing them to be accessed after the generator finishes.
+        :return:
+        """
+        # For cases when we known we have row columns bu they are not pre-defined.
+        if save_row_names and self.row_titles is None:
+            self.row_titles = []
+
+        file_obj = self.__handleinput()
+
+        has_not_been_casted = True
+
+        if self.has_col_names:
+            self.col_titles = file_obj.readline().strip("\n").split(self.delimiter)
+            # self.col_titles = np.array(file_obj.readline().strip("\n").split(self.delimiter))
+        # The first row gives us the highest datatype. Int should not be taken, because if the first row
+        # contains integer and the second floats, then you truncate important information of the latter.
+        # So float should be the highest datatype, then string and then object.
+        # But, it is discussable whether casting is necessary. The function generate is for reading
+        # line by line. So every function handles rows independent. I will cast to floats if possible, that every row
+        # with numbers looks the same. When strings appear, they appear...
+        self.return_type = return_type
+
+        for line in file_obj:
+
+            if line[0] is not self.comment_character:
+
+                line_split = line.strip("\n").split(self.delimiter)
+
+                if self.has_row_names:
+                    # Remove the first column from the vector and use it as the title.
+                    tmp_row_title = line_split.pop(0)
+
+                    # Only save the row name unless specifically told to do so.
+                    if save_row_names:
+                        self.row_titles.append(tmp_row_title)
+                else:
+                    tmp_row_title = None
+
+                vector = np.array(line_split)
+
+                if self.return_type is not None:
+                    vector = vector.astype(self.return_type)
+                else:
+                    try:
+                        vector = vector.astype(float)
+                        if np.count_nonzero(vector - vector.astype(int)) == 0:
+                            vector = vector.astype(int)
+                    except ValueError:
+                        try:
+                            vector = vector.astype(str)
+                        except ValueError:
+                            vector = vector.astype(object)
+
+                yield tmp_row_title, vector
+
+        if self.file_name != 'sys.stdin':
+            file_obj.close()
+
+    def out(self, ndarray, column_titles=None, row_titles=None, output_type='sys.stdout'):
+        """
+        Handle the standard task out outputing the vector.
+        :param ndarray:
+        :param output_type:
+        :return:
+        """
+        from collections import Iterable
+
+        if output_type != 'sys.stdout':
+            output_type = open(output_type, 'w')
+        else:
+            output_type = sys.stdout
+
+        # Handle column titles output.
+        if column_titles is not None:
+            output_type.write(self.delimiter.join(column_titles) + '\n')
+
+        if not isinstance(ndarray, Iterable):
+            """ Occasionally input from various functions produces non-iterable data types, e.g. numbers. This
+            check will fix those condition be creating a 2d iterable.
+            """
+            ndarray = [[ndarray]]
+
+        for index, row in enumerate(ndarray):
+            row_string = np.char.mod('%s', row)
+            row_s = self.delimiter.join(row_string)
+            if row_titles is not None:
+                output_type.write(str(row_titles[index]) + self.delimiter)
+            output_type.write(row_s + "\n")
+
+    def iterative_out(self, row_title, vector, column_titles=None, output_type='sys.stdout'):
+        """ Handles output of vectors and column and row titles as they are created.
+        :param row_title: The text for the row title.
+        :param vector: The vector for the given row.
+        :param column_titles: A list of column titles. This is only printed once during the first instance.
+        :param output_type: Where to output to.
+        :return:
+        """
+        if output_type != 'sys.stdout':
+            output_type = open(output_type, 'w')
+        else:
+            output_type = sys.stdout
+
+        # Handle column titles output.
+        if self.col_titles is not None and self.has_col_names and not self._column_have_been_printed:
+            assert self.col_titles is not [], "Error: Set to print column titles, but no column titles exist."
+            output_type.write(self.delimiter.join(self.col_titles) + '\n')
+            self._column_have_been_printed = True
+
+        # Handle row titles output.
+        row_string = np.char.mod('%s', vector)
+        row_s = self.delimiter.join(row_string)
+
+        if (row_title is not None) and (row_title is not False and self.has_row_names):
+            row_s = row_title + self.delimiter + row_s
+
+        # Finally, write the vector.
+        output_type.write(row_s + "\n")
+
+    def _cast_matrix(self, np_matrix):
+        matrix = np_matrix[:]
+        if self.only_on is not None:
+            matrix, col_list = _slice_list(matrix, self.only_on, keep=True)
+            if self.has_row_names:
+                col_list = [x + 1 for x in col_list]
+                col_list.insert(0, 0)
+            if self.has_col_names:
+                self.col_titles = [self.col_titles[i] for i in col_list]
+
+        # Check the highest datatype to cast to
+        try:
+            matrix = matrix.astype(float)
+            if np.count_nonzero(matrix - matrix.astype(int)) == 0:
+                matrix = matrix.astype(int)
+        except ValueError:
+            try:
+                matrix = matrix.astype(str)
+            except ValueError:
+                matrix = matrix.astype(object)
+        return matrix
+
+# This might be a better way to get input.
+# http://docs.scipy.org/doc/numpy/user/basics.io.genfromtxt.html#defining-the-input
+def vecparse(filename, col_names=False, row_names=False):
+    """
+    This function parses tsv files to a tupel of the containing matrix, col_titles, row_titles, type_of_matrix
+    :param filename: file to be parsed
+    :param col_names: if file contains a header. Default: false => None
+    :param row_names: if file contains row_titles. Default: false => None
+    :return: (matrix, col_titles, row_titles, type_of_matrix)
+    """
+    if filename != 'sys.stdin':
+        file = open(filename)
+    else:
+        file = sys.stdin
+    if col_names:
+        col_titles = np.array(file.readline().strip("\n").split('\t'))
+    else:
+        col_titles = None
+    matrix = []
+    row_titles = []
+    return_type = object
+    for line in file:
+
+        line_split = line.strip("\n").split('\t')
+        if row_names:
+            row_titles.append(line_split.pop(0))
+        else:
+            row_titles = None
+
+        for tryout in (float, str, object):
+            try:
+                line_split = list(map(tryout, line_split))
+                return_type = tryout
+            except ValueError:
+                continue
+            break
+
+        matrix.append(line_split)
+
+    ndarray = np.array(matrix, dtype=return_type)
+    matrix = ndarray
+    if filename != 'sys.stdin':
+        file.close()
+    return matrix, col_titles, row_titles, return_type
+
+
+def outputvector(ndarray, column_titles=None, row_titles=None, output_type='sys.stdout'):
+    """
+    Handle the standard task out outputing the vector.
+    :param ndarray:
+    :param output_type:
+    :return:
+    """
+    if output_type != 'sys.stdout':
+        output_type = open(output_type, 'w')
+    else:
+        output_type = sys.stdout
+    if column_titles is not None:
+        output_type.write("\t".join(column_titles) + '\n')
+
+    for index, row in enumerate(ndarray):
+        row_string = np.char.mod('%s', row)
+        row_s = "\t".join(row_string)
+        if row_titles is not None:
+            output_type.write(str(row_titles[index]) + "\t")
+        output_type.write(row_s + "\n")
+
+
+class VectorFormats:
+    """This class handles the output format of vectors.
+
+    """
+    def __init__(self):
+        self.format_choices = ["TSV", "SVMLIGHT", "DICT"]
+
+    def getavailableformats(self):
+        return self.format_choices
+
+    def getdefaultformat(self):
+        return self.format_choices[0]
+
+    def outputformat(self):
+        pass
+
+
+class ParseFasta:
+    # @TODO: How to handle non-standard or illegal chars???
+
+    def __init__(self, input_format="FASTA"):
+        """
+        """
+
+        self.format_choices = {
+            "FASTA": self.fastasequencegenerator,
+            "FAVEC": self.fastasvecgenerator
+        }
+        # Setting this will allow automatic parsing or generating.
+        self.input_format = "FASTA"
+
+    def fastasequencegenerator(self, fasta_txt):
+        """"This function parses fasta files and generates tuples of fasta id and fasta sequences.
+        Where the format of a fasta is  >{Description}\n{Sequence}[\n>{Description}\n{Sequence}]*",
+        Generates
+        :param fasta_txt:
+        :return: (fasta_title, fasta_seq)
+        """
+
+        fasta_seq_list = []
+        fasta_title = None
+        for fasta_line in fasta_txt:
+            if fasta_line[0] == ">":
+                if fasta_title is not None:
+                    yield fasta_title, "".join(fasta_seq_list)
+                    fasta_seq_list = []
+                fasta_title = fasta_line.strip()
+                assert len(fasta_title) > 0
+            else:
+                fasta_seq_list.append(fasta_line.strip())
+
+        # Return the last sequence.
+        yield fasta_title, "".join(fasta_seq_list)
+
+    def fastasvecgenerator(self, fasta_txt, DELIM):
+        """A vector with the description as the first column and sequence in the second."
+        Generates fasta_title, fasta_seq tuples
+        :param fasta_txt:
+        :return:
+        """
+
+        fasta_seq_list = []
+        fasta_title = None
+        line_number = 0
+
+        for fasta_vec in fasta_txt:
+
+            line_number += 1
+            fasta_vec_list = fasta_vec.strip().split(DELIM)
+            assert len(fasta_vec_list) == 2, "Error: Incorrect vector length. Line %s." % line_number
+            fasta_title, fasta_seq = fasta_vec_list
+
+            yield fasta_title, fasta_seq
+
+    def getavailableformats(self):
+        return list(self.format_choices)
+
+    def getdefaultformat(self):
+        return "FASTA"
+
+    def setinputformat(self, input_format):
+        assert input_format in self.format_choices
+        self.input_format = input_format
+
+    def generatefastaobjects(self, fasta_txt):
+        """ Returns a generator that will generate name, seq tuples from a fasta file or fasta vec.
+        """
+        return self.format_choices[self.input_format](fasta_txt)
+
+
+def legal_characters(value):
+    """ This function is passed as to argparse.add_argument's type variable. It checks for illegal characters and
+    if found prints an error message.
+    """
+    illegal_chars = set(value) - set("0123456789,:")
+    if illegal_chars:
+        raise argparse.ArgumentTypeError(
+            '"%s". Only integers, ":", and, "," allowed.' % ", ".join(sorted(list(illegal_chars))))
+    return value
+
+
+def _shared_params(parser, enable_column_titles=True, enable_row_titles=True, enable_delimiter=True,
+                   only_apply_on=False):
+    """ This function stores basic arguments used in almost every other function.
+
+    The default variables offer two types of functionality.
+
+    Passing a:
+     False -  silences them
+     True - Includes them in the argparse object.
+     A string - overrides the default string.
+
+    :param parser: An argparse object.
+    :return: Does not return anything. However, does add variables to the argparse object.
+    """
+
+    if enable_column_titles:
+        # Override the help string if a string is passed instead of a boolean.
+        if type(enable_column_titles) == str:
+            help_string = enable_column_titles
+        else:
+            help_string = 'The matrix has column titles.'
+        parser.add_argument(
+            '-c', "--column-titles",
+            action="store_true",
+            help=help_string
+        )
+
+    if enable_row_titles:
+        if type(enable_row_titles) == str:
+            help_string = enable_row_titles
+        else:
+            help_string = 'The matrix has row titles.'
+        parser.add_argument(
+            '-r', "--row-titles",
+            action="store_true",
+            help=help_string
+        )
+
+    if enable_delimiter:
+        if type(enable_delimiter) == str:
+            help_string = enable_delimiter
+        else:
+            help_string = 'The characters used to separate columns. default: <TAB>'
+        parser.add_argument(
+            '-d', "--delimiter",
+            nargs='?',
+            default="\t",
+            help=help_string
+        )
+
+    # We have not found a condition where this not applicable.
+    parser.add_argument(
+        '--roundto',
+        type=int,
+        default=5,
+        help="Round to n decimal places (when rounding is available)."
+    )
+
+    if only_apply_on:
+        if type(enable_delimiter) == str:
+            help_string = enable_delimiter
+        else:
+            help_string = "Apply operation on a subset of columns. " + \
+                          "Use comma separated integers for single columns or ranges as start:end. " + \
+                          "Default: all columns."
+        parser.add_argument(
+            "--only-apply-on",
+            type=legal_characters,
+            nargs='?',
+            help=help_string
+        )
+
+
+def _slice_list(matrix, slice_string, keep=True):
+    """
+    :param slice_string:
+    :param matrix:
+    :return:
+    """
+    number_of_columns = np.shape(matrix)[1]
+    comma_separated_values = slice_string.split(",")
+    #list_with_indices = list(map(int,comma_separated_values))
+    list_with_indices = []
+    for el in comma_separated_values:
+        index_of_colon = el.find(":")
+        last = number_of_columns
+        if index_of_colon != -1:  # this means ':' found
+            if len(el) == 1:
+                list_with_indices.extend(list(range(0,last)))
+            else:
+                reverse = False
+                # if the colon is at the beginning like :3
+                if index_of_colon == 0:
+                    first = 0
+                    last = int(el[1:len(el)])  # + 1
+                    if last < 0:
+                        last = number_of_columns + last
+                # if the colon is at the end of the element like 20:
+                elif index_of_colon == (len(el) - 1):
+                    first = int(el[:len(el) - 1])
+                    last = number_of_columns - 1
+                else:
+                    first = int(el[:index_of_colon])
+                    last = int(el[index_of_colon + 1:])
+                if (first < 0) ^ (last < 0):  # one is negative
+                    if first < 0:
+                        first = number_of_columns + first
+                    else:
+                        last = number_of_columns + last
+                if first > last:
+                    first, last = last, first
+                    reverse = True
+                last += 1
+                list_of_range = list(range(first, last))
+                if reverse:
+                    list_of_range = list_of_range[::-1]
+                list_with_indices.extend(list_of_range)
+        else:
+            list_with_indices.append(int(el))
+        f = lambda x: x % number_of_columns
+        list_with_indices = list(map(f, list_with_indices))
+
+    if keep is False:
+        ncol_list = list(range(0, number_of_columns))
+        col_list = list(set(list_with_indices))
+        for x in col_list:
+            ncol_list.remove(x)
+        list_with_indices = ncol_list[:]
+
+    new_matrix = matrix[:, list_with_indices]
+    return new_matrix, list_with_indices
