@@ -1,0 +1,430 @@
+# Copyright (C) 2014 Red Hat
+#
+# This file is part of wikitcms.
+#
+# wikitcms is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Author: Adam Williamson <awilliam@redhat.com>
+
+"""Classes that describe test events."""
+
+from __future__ import unicode_literals
+from __future__ import print_function
+
+import abc
+import logging
+import re
+from collections import OrderedDict
+
+import fedfind.helpers
+import fedfind.release
+import mwclient.errors
+from cached_property import cached_property
+from six.moves.urllib.request import urlopen
+
+from . import listing
+from . import page
+from . import helpers
+
+logger = logging.getLogger(__name__)
+
+
+class ValidationEvent(object):
+    """A parent class for different types of release validation event.
+    site must be an instance of wikitcms.Wiki, already with
+    appropriate access rights for any actions to be performed (i.e.
+    things instantiating an Event are expected to do site.login
+    themselves if needed). Required attributes: shortver,
+    category_page.
+    """
+    __metaclass__ = abc.ABCMeta
+
+    def __init__(self, site, release, milestone='', compose=''):
+        self.site = site
+        self.release = release
+        self.milestone = str(milestone)
+        try:
+            self.compose = fedfind.helpers.date_check(
+                compose, fail_raise=True, out='str')
+        except ValueError:
+            self.compose = str(compose)
+        self.version = "{0} {1} {2}".format(
+            self.release, self.milestone, self.compose)
+        self.parent_category_page = listing.ValidationCategory(site, release)
+        self.download_page = page.DownloadPage(self.site, self)
+        # Sorting helpers. sortname is a string, sorttuple is a
+        # 4-tuple. sorttuple is more reliable. See the function docs.
+        self.sortname = helpers.fedora_release_sort(self.version)
+        self.sorttuple = helpers.triplet_sort(
+            self.release, self.milestone, self.compose)
+
+    @abc.abstractproperty
+    def _current_content(self):
+        """The content for the CurrentFedoraCompose template for
+        this test event.
+        """
+        pass
+
+    @abc.abstractproperty
+    def _pagetype(self):
+        """The ValidationPage class to be used for this event's pages
+        (for use by valid_pages).
+        """
+        pass
+
+    @property
+    def result_pages(self):
+        """A list of wikitcms page objects for currently-existing
+        pages that are a part of this test event, according to the
+        naming convention.
+        """
+        pages = self.site.allresults(
+            prefix="Fedora {0} ".format(self.version))
+        return [p for p in pages if isinstance(p, page.ValidationPage)]
+
+    @property
+    def valid_pages(self):
+        """A list of the expected possible result pages (as
+        page.ValidationPage objects) for this test event, derived from
+        the available test types and the naming convention.
+        """
+        return [self._pagetype(self.site, self.release, typ,
+                               milestone=self.milestone,
+                               compose=self.compose)
+                for typ in self.site.testtypes]
+
+    @property
+    def summary_page(self):
+        """The page.SummaryPage object for the event's result summary
+        page. Very simple property, but not set in __init__ as the
+        summary page object does (slow) wiki roundtrips in  __init__.
+        """
+        return page.SummaryPage(self.site, self)
+
+    @cached_property
+    def ff_release(self):
+        """A fedfind release object matching this event."""
+        return fedfind.release.get_release(release=self.release,
+                                           milestone=self.milestone,
+                                           compose=self.compose)
+
+    @property
+    def has_bootiso(self):
+        """Does at least one boot.iso exist for this compose?"""
+        return any(img['type'] == 'boot' for img in self.ff_release.all_images)
+
+    @property
+    def compose_exists(self):
+        """Does the compose for this event seem to exist at all?"""
+        return self.ff_release.exists
+
+    @property
+    def image_table(self):
+        """A nicely formatted download table for the images for this
+        compose. Here be dragons (and wiki table syntax). What you get
+        from this is a table with one row for each unique 'image
+        identifier' - the payload plus the image type - and columns
+        for all arches in the entire image set; if there's an image
+        for the given image type and arch then there'll be a download
+        link in the appropriate column.
+        """
+        # sorting score values (see below)
+        archscores = (
+            (('x86_64', 'i386'), 2000),
+        )
+        loadscores = (
+            (('everything',), 300),
+            (('workstation',), 220),
+            (('server',), 210),
+            (('cloud', 'desktop'), 200),
+            (('kde',), 190),
+            (('minimal',), 90),
+            (('xfce',), 80),
+            (('soas',), 73),
+            (('mate',), 72),
+            (('cinnamon',), 71),
+            (('lxde',), 70),
+            (('source',), -10),
+        )
+        # Start by iterating over all images and grouping them by load
+        # (that's imagedict) and keeping a record of each arch we
+        # encounter (that's arches).
+        arches = set()
+        imagedict = dict()
+        for img in self.ff_release.all_images:
+            if img['arch']:
+                arches.add(img['arch'])
+            # simple human-readable identifier for the image
+            desc = ' '.join((img['payload'], img['type']))
+            # assign a 'score' to the image; this will be used for
+            # ordering the download table's rows.
+            img['score'] = 0
+            for (values, score) in archscores:
+                if img['arch'] in values:
+                    img['score'] = score
+            for (values, score) in loadscores:
+                if img['payload'].lower() in values:
+                    img['score'] += score
+            # The dict values are lists of images. We could use a
+            # DefaultDict here, but faking it is easy too.
+            if desc in imagedict:
+                imagedict[desc].append(img)
+            else:
+                imagedict[desc] = [img]
+        # Now we have our data, sort the dict using the weight from
+        # fedfind...for our purposes we can just
+        # use the weight of the first image.
+        imagedict = OrderedDict(sorted(imagedict.items(),
+                                       key=lambda x: x[1][0]['score'],
+                                       reverse=True))
+        # ...and sort the arches (just so they don't move around in
+        # each new page and confuse people).
+        arches = sorted(arches)
+
+        # Now generate the table.
+        table = '{| class="wikitable sortable collapsible" width=100%\n|-\n'
+        # Start of the header row...
+        table += '! Image'
+        for arch in arches:
+            # Add a column for each arch
+            table += ' !! {0}'.format(arch)
+        table += '\n'
+        for (payload, imgs) in imagedict.items():
+            # Add a row for each payload
+            table += '|-\n'
+            table += '| {0}\n'.format(payload)
+            for arch in arches:
+                # Add a cell for each arch (whether we have an image
+                # or not)
+                table += '| '
+                for img in imgs:
+                    if img['arch'] == arch:
+                        # Add a link to the image if we have one
+                        url = '/'.join((self.ff_release.location, img['path']))
+                        table += '[{0} Download]'.format(url)
+                table += '\n'
+        # Close out the table when we're done
+        table += '|-\n|}'
+        return table
+
+    def update_current(self):
+        """Make the CurrentFedoraCompose template on the wiki point to
+        this event. The template is used for the Current (testtype)
+        Test redirect pages which let testers find the current results
+        pages, and for other features of wikitcms/relval. Children
+        must define _current_content.
+        """
+        content = "{{tempdoc}}\n<onlyinclude>{{#switch: {{{1|full}}}\n"
+        content += self._current_content
+        content += "}}</onlyinclude>\n[[Category: Fedora Templates]]"
+        curr = self.site.pages['Template:CurrentFedoraCompose']
+        curr.save(content, "relval: update to current event", createonly=None)
+
+    def get_package_versions(self, packages):
+        """Passed a list of package names, returns a dict with the
+        names as the keys and the versions of those packages found in
+        the compose's tree as the values. May raise an exception if
+        the compose doesn't exist, or it can't reach the server.
+        """
+        verdict = dict()
+        initials = set([p[0].lower() for p in packages])
+        text = ''
+        # Grab the directory indexes we need
+        for i in initials:
+            url = '{0}/x86_64/os/Packages/{1}/'.format(
+                self.ff_release.https_url_generic, i)
+            index = urlopen(url)
+            text += index.read()
+        # Now find each package's version. This is making a couple of
+        # assumptions about how the index HTML source will look and
+        # also assuming that the 'package version' is the bit after
+        # packagename- and before .fcXX, it's not perfect (won't give
+        # epochs and won't work for non-fcXX dist'ed packages, for
+        # e.g.) but should be good enough.
+        for package in packages:
+            ver = ''
+            patt = re.compile('href="' + package + r'-(.*?)\.fc\d\d.*?\.rpm')
+            match = patt.search(text)
+            if match:
+                ver = match.group(1)
+            verdict[package] = ver
+        return verdict
+
+    def create(self, testtypes=None, force=False, current=True, check=False):
+        """Create the event, by creating its validation pages,
+        summary page, download page, category pages, and updating the
+        current redirects. 'testtypes' can be an iterable that limits
+        creation to the specified testtypes. If 'force' is True, pages
+        that already exist will be recreated (destroying any results
+        on them). If 'current' is False, the current redirect pages
+        will not be updated. If 'check' is true, we check if any
+        result page already exists first, and bail immediately if so
+        (so we don't start creating pages then hit one that exists and
+        fail half-way through, for things that don't want that.)
+        """
+        logger.info("Creating validation event %s", self.version)
+        createonly = True
+        if force:
+            createonly = None
+        pages = self.valid_pages
+        if testtypes:
+            logger.debug("Restricting to testtypes %s", ' '.join(testtypes))
+            pages = [pag for pag in pages if pag.testtype in testtypes]
+        if not pages:
+            raise ValueError("No result pages to create! Wrong test type?")
+        if check:
+            if any(pag.text() for pag in pages):
+                raise ValueError("A result page already exists!")
+
+        pages.extend((self.summary_page, self.download_page,
+                      self.category_page, self.parent_category_page))
+
+        def _handle_existing(err):
+            """We need this in two places, so."""
+            if err.args[0] == 'articleexists':
+                # no problem, just move on.
+                logger.info("Page already exists, and forced write was not "
+                            "requested! Not writing.")
+            else:
+                raise err
+
+        for pag in pages:
+            try:
+                logger.info("Creating page %s", pag.name)
+                pag.write(createonly=createonly)
+                if current:
+                    pag.update_current()
+            except mwclient.errors.APIError as err:
+                _handle_existing(err)
+            except AttributeError:
+                # not all pages have update_current. this is fine.
+                pass
+        if current:
+            try:
+                self.update_current()
+            except mwclient.errors.APIError as err:
+                _handle_existing(err)
+
+    @classmethod
+    def from_page(cls, pageobj):
+        """Return the ValidationEvent object for a given ValidationPage
+        object.
+        """
+        return cls(pageobj.site, pageobj.release, pageobj.milestone,
+                   pageobj.compose)
+
+
+class ComposeEvent(ValidationEvent):
+    """An Event that describes a release validation event - that is,
+    the testing for a particular nightly, test compose or release
+    candidate build.
+    """
+    def __init__(self, site, release, milestone, compose):
+        super(ComposeEvent, self).__init__(
+            site, release, milestone=milestone, compose=compose)
+        self.shortver = "{0} {1}".format(self.milestone, self.compose)
+        self.category_page = listing.ValidationCategory(
+            site, self.release, self.milestone)
+
+    @property
+    def _current_content(self):
+        """The content for the CurrentFedoraCompose template for
+        this test event.
+        """
+        tmpl = ("| full = {0}\n| release = {1}\n| milestone = {2}\n"
+                "| compose = {3}\n| date =\n")
+        return tmpl.format(
+            self.version, self.release, self.milestone, self.compose)
+
+    @property
+    def _pagetype(self):
+        """For a ComposeEvent, obviously, ComposePage."""
+        return page.ComposePage
+
+
+class NightlyEvent(ValidationEvent):
+    """An Event that describes a release validation event - that is,
+    the testing for a particular nightly, test compose or release
+    candidate build. Milestone should be 'Rawhide' or 'Branched'.
+    Note that a Fedora release number attached to a Rawhide nightly
+    compose is an artificial concept that can be considered a Wikitcms
+    artifact. Rawhide is a rolling distribution; its nightly composes
+    do not really have a release number. What we do when we attach
+    a release number to a Rawhide nightly validation test event is
+    *declare* that, with our knowledge of Fedora's development cycle,
+    we believe the testing of that Rawhide nightly constitutes a part
+    of the release validation testing for that future release.
+    """
+    def __init__(self, site, release, milestone, compose, url=''):
+        super(NightlyEvent, self).__init__(
+            site, release, milestone=milestone, compose=compose)
+        self._composeurl = str(url)
+        self.shortver = self.compose
+        self.category_page = listing.ValidationCategory(
+            site, self.release, nightly=True)
+
+    @property
+    def _current_content(self):
+        """The content for the CurrentFedoraCompose template for
+        this test event.
+        """
+        tmpl = ("| full = {0}\n| release = {1}\n| milestone = {2}\n"
+                "| compose =\n| date = {3}\n")
+        return tmpl.format(
+            self.version, self.release, self.milestone, self.compose)
+
+    @property
+    def _pagetype(self):
+        """For a NightlyEvent, obviously, NightlyPage."""
+        return page.NightlyPage
+
+    @cached_property
+    def ff_release(self):
+        """A fedfind release object matching this event."""
+        # with Pungi 4, release/milestone/compose is no longer quite
+        # enough to identify a nightly compose: there is also a value
+        # 'respin' for multiple composes in a day. I don't want to
+        # crowbar the 'respin' concept into wikitcms quite yet, so
+        # this is a hedge that allows us to pass in a compose URL when
+        # creating events, to handle this case. In practice ff_release
+        # is only used for creating events. For instantiating existing
+        # events we can get the compose URL back out of the download
+        # page text. This is a bit of an anal hack because it should
+        # almost never be needed, but I wanted to get it right. This
+        # is in NightlyEvent because we haven't figured out how Pungi
+        # 4 will work for ComposeEvents yet and I don't want to do
+        # weird stuff to them.
+        if self._composeurl:
+            try:
+                return fedfind.release.get_release_url(self._composeurl)
+            except ValueError:
+                pass
+        elif int(self.compose) > 20160224:
+            # pre-20160224 nightlies were Pungi 3 so skip this
+            text = self.download_page.text()
+            if text:
+                # holy shit, this is just awful
+                urlpatt = re.compile(r'https?://.*?/compose.*?/compose')
+                match = urlpatt.search(text)
+                if match:
+                    try:
+                        return fedfind.release.get_release_url(match.group(0))
+                    except ValueError:
+                        pass
+        # this is the fallback (and correct for pre-20160224, and
+        # might by dumb luck hit the right compose for Pungi 4,
+        # it'll at least find something)
+        return fedfind.release.get_release(release=self.release,
+                                           milestone=self.milestone,
+                                           compose=self.compose)
