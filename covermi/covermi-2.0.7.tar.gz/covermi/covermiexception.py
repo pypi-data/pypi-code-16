@@ -1,0 +1,3 @@
+class CoverMiException(Exception):
+    pass
+
