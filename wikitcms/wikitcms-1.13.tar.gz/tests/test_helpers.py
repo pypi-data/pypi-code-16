@@ -1,0 +1,87 @@
+# Copyright (C) 2015 Red Hat
+#
+# This file is part of wikitcms.
+#
+# wikitcms is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Author: Adam Williamson <awilliam@redhat.com>
+
+import wikitcms.helpers as hl
+
+# Only triplet_sort can handle these
+HARD_SORTS = [
+    ('9', 'Beta', 'RC1'),
+    ('10', 'Alpha', 'TC1'),
+    ('10', 'Alpha', 'TC2'),
+    ('10', 'Alpha', 'TC10'),
+]
+
+# Weird old ones
+OLD_SORTS = [
+    ('12', 'Alpha', 'TCRegression'),
+    ('12', 'Beta', 'PreBeta'),
+    ('12', 'Beta', 'TC'),
+    ('12', 'Final', 'Pre-RC'),
+    ('12', 'Final', 'RC1'),
+    ('21', 'Rawhide', '2014 06'),
+    ('21', 'Nightly', '2014 08'),
+    ('21', 'Alpha', 'TC1'),
+]
+
+# Standard stuff
+STANDARD_SORTS = [
+    ('22', 'Final', 'RC1'),
+    ('22', 'Postrelease', '20151015'),
+    ('23', 'Rawhide', '20150607'),
+    ('23', 'Branched', '20150717'),
+    ('23', 'Alpha', 'TC1'),
+    ('23', 'Alpha', 'TC2'),
+    ('23', 'Alpha', 'RC1'),
+    ('23', 'Beta', 'TC1'),
+    ('23', 'Beta', 'TC2'),
+    ('23', 'Final', 'RC1'),
+    ('23', 'Final', 'RC1.1'),
+]
+
+class TestHelpers:
+    """Tests for the functions in helpers.py."""
+    def test_fedora_release_sort(self):
+        rels = OLD_SORTS + STANDARD_SORTS
+        for (num, rel) in enumerate(rels[1:], 1):
+            prevrel = rels[num-1]
+            assert hl.fedora_release_sort(' '.join(rel)) > hl.fedora_release_sort(' '.join(prevrel))
+
+    def test_triplet_sort(self):
+        rels = HARD_SORTS + OLD_SORTS + STANDARD_SORTS
+        for (num, rel) in enumerate(rels[1:], 1):
+            prevrel = rels[num-1]
+            sorttup = hl.triplet_sort(*rel)
+            assert sorttup > hl.triplet_sort(*prevrel)
+            assert hl.triplet_unsort(*sorttup) == (rel)
+
+    def test_find_bugs(self):
+        # text taken from a real Test Day page -
+        # 2011-03-24_Power_Management - with a [[rhbug link
+        # added as I couldn't find a page with all three. Some non-bug
+        # text to make sure it's not erroneously processed, and an
+        # example-type bug to make sure it's filtered
+        text = """
+| {{result|warn}} [https://bugzilla.redhat.com/show_bug.cgi?id=690177 switching of profile waiting forever] 
+| [http://www.smolts.org/client/show/pub_1c75a13c-b42f-47b8-b886-a4ebf2c41305 HW]
+| {{result|pass}} [https://fedoraproject.org/wiki/File:Pm-test-day-20110324-pub_54d92a30-b0cc-46ed-991c-00b3117ddb3a.txt bugreport]
+| {{result|warn}} <ref> {{bz|690194}} - Probably what Albertpool is seeing</ref>
+| {{result|warn}} <ref> [[rhbug:1239865|some rhbug link]]
+{{bz|123456}} example bug
+"""
+        assert hl.find_bugs(text) == set(('690177', '690194', '1239865'))
