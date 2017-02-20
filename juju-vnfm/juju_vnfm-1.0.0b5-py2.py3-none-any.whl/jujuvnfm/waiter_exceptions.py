@@ -1,0 +1,8 @@
+
+
+
+
+
+
+class WaiterException(Exception):
+    pass
