@@ -1,0 +1,1 @@
+def joke(): return "lol"
