@@ -1,0 +1,25 @@
+from setuptools import setup
+
+setup(
+    name='vdfedit',
+    version='1.0.1',
+    scripts=['vdfedit'],
+    install_requires=['PyVDF>=2.0.0'],
+    license='MIT',
+    url='https://github.com/amreuland/vdfedit',
+    author='Austin Reuland',
+    author_email='amreuland@gmail.com',
+    keywords = "VDF KeyValues Valve PyVDF",
+    description='Fast and Easy Python Valve Data File (VDF) Reader and Writer',
+    platforms='any',
+    classifiers = [
+        'Development Status :: 4 - Beta',
+        'Environment :: Console',
+        'License :: OSI Approved :: MIT License',
+        'Natural Language :: English',
+        'Operating System :: OS Independent',
+        'Programming Language :: Python :: 2.7',
+        'Topic :: Text Processing',
+        'Topic :: Utilities'
+    ]
+)
