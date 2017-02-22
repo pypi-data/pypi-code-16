@@ -1,0 +1,11 @@
+__version__ = "0.8.0"
+__git_commiter_name__ = "Itai Shirav"
+__git_commiter_email__ = "itais@infinidat.com"
+__git_branch__ = '(HEAD detached at v0.8.0)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '9a81372fffc10b62aedcd995194dd89fe2852f71'
+__git_head_subject__ = 'Finished Release v0.8.0'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
+__git_commit_date__ = '2017-02-22 10:52:40'
