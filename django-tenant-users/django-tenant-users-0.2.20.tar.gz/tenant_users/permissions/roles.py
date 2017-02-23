@@ -1,0 +1,13 @@
+PUBLIC_ROLE_DEFAULT = 'Public Default'
+
+TENANT_ROLE_ADMIN = 'Admin'
+
+PUBLIC_TENANT_DEFAULT_ROLES = {
+    PUBLIC_ROLE_DEFAULT : [
+    ],
+}
+
+TENANT_DEFAULT_ROLES = {
+    TENANT_ROLE_ADMIN : [
+    ],
+}
