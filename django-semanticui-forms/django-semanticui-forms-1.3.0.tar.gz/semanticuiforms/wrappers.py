@@ -1,0 +1,77 @@
+from django.conf import settings
+
+
+# Wrappers
+FIELD_WRAPPER = getattr(settings, "SEMANTIC_UI_FIELD_WRAPPER", (
+	"<div class=\"%(class)sfield\">%(label)s%(field)s%(errors)s</div>"
+))
+
+ERROR_WRAPPER = getattr(settings, "SEMANTIC_UI_ERROR_WRAPPER", (
+	"<div class=\"ui red pointing prompt label\">%(message)s</div>"
+))
+
+INPUT_WRAPPER = getattr(settings, "SEMANTIC_UI_INPUT_WRAPPER", (
+	"<div class=\"ui%(style)sinput\">%(icon)s%(field)s</div>"
+))
+
+CHECKBOX_WRAPPER = getattr(settings, "SEMANTIC_UI_CHECKBOX_WRAPPER", (
+	"<div class=\"ui%(style)scheckbox\">%(field)s%(label)s</div>"
+))
+
+DROPDOWN_WRAPPER = getattr(settings, "SEMANTIC_UI_DROPDOWN_WRAPPER", (
+	"<div class=\"ui%(style)sselection dropdown\">"
+		"<input name=\"%(name)s\"%(attrs)stype=\"hidden\"></input>"
+		"<i class=\"dropdown icon\"></i>"
+		"<div class=\"default text\">%(placeholder)s</div>"
+		"<div class=\"menu\">"
+			"%(choices)s"
+		"</div>"
+	"</div>"
+))
+
+MULTIPLE_DROPDOWN_WRAPPER = getattr(settings, "SEMANTIC_UI_MULTIPLE_DROPDOWN_WRAPPER", (
+	"<div class=\"ui%(style)smultiple selection dropdown\">"
+		"%(field)s"
+		"<i class=\"dropdown icon\"></i>"
+		"<div class=\"default text\">%(placeholder)s</div>"
+		"<div class=\"menu\">"
+			"%(choices)s"
+		"</div>"
+	"</div>"
+))
+
+CALENDAR_WRAPPER = getattr(settings, "SEMANTIC_UI_CALENDAR_WRAPPER", (
+	"<div class=\"ui%(style)scalendar\">"
+		"<div class=\"ui input%(align)sicon\">"
+			"%(icon)s%(field)s"
+		"</div>"
+	"</div>"
+))
+
+
+# Templates
+LABEL_TEMPLATE = getattr(settings, "SEMANTIC_UI_LABEL_TEMPLATE", (
+	"<label for=\"id_{}\">{}</label>"
+))
+
+ICON_TEMPLATE = getattr(settings, "SEMANTIC_UI_ICON_TEMPLATE", (
+	"<i class=\"{} icon\"></i>"
+))
+
+FLAG_TEMPLATE = getattr(settings, "SEMANTIC_UI_FLAG_TEMPLATE", (
+	"<i class=\"{} flag\"></i>"
+))
+
+CHOICE_TEMPLATE = getattr(settings, "SEMANTIC_UI_CHOICE_TEMPLATE", (
+	"<div class=\"item\" data-value=\"{}\">{}</div>"
+))
+
+ICON_CHOICE_TEMPLATE = getattr(settings, "SEMANTIC_UI_ICON_CHOICE_TEMPLATE", (
+	"<div class=\"item\" data-value=\"{}\">{}{}</div>"
+))
+
+COUNTRY_TEMPLATE = getattr(settings, "SEMANTIC_UI_COUNTRY_TEMPLATE", (
+	"<div class=\"item\" data-value=\"{}\">"
+		"%s {}"
+	"</div>"
+) % FLAG_TEMPLATE)
