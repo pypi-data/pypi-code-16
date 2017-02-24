@@ -1,0 +1,36 @@
+from setuptools import setup
+import versioneer
+
+setup(
+    name='samplerate',
+    version=versioneer.get_version(),
+    cmdclass=versioneer.get_cmdclass(),
+    description='Python bindings for libsamplerate based on CFFI and NumPy',
+    long_description=open('README.rst').read(),
+    author='Tino Wagner',
+    author_email='ich@tinowagner.com',
+    url='https://github.com/tuxu/python-samplerate',
+    download_url='',
+    classifiers=[
+        'Development Status :: 3 - Alpha',
+        'Environment :: Console',
+        'Intended Audience :: Developers',
+        'Intended Audience :: Science/Research',
+        'License :: OSI Approved :: MIT License',
+        'Operating System :: OS Independent',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 3',
+        'Topic :: Scientific/Engineering',
+        'Topic :: Multimedia :: Sound/Audio',
+    ],
+    keywords='samplerate converter signal processing audio',
+    platforms='any',
+    license='MIT',
+    packages=['samplerate'],
+    include_package_data=True,
+    zip_safe=False,
+    cffi_modules=['samplerate/samplerate_build.py:ffibuilder'],
+    setup_requires=['cffi>=1.0.0', 'pytest-runner'],
+    install_requires=['cffi>=1.0.0', 'numpy'],
+    tests_require=['pytest'],
+)
