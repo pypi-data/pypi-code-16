@@ -1,0 +1,63 @@
+u"""
+LICENSE:
+Copyright 2016 Hermann Krumrey
+
+This file is part of xdcc_dl.
+
+    xdcc_dl is a program that allows downloading files via the XDCC
+    protocol via file serving bots on IRC networks.
+
+    xdcc_dl is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    xdcc_dl is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with xdcc_dl.  If not, see <http://www.gnu.org/licenses/>.
+LICENSE
+"""
+
+# imports
+from __future__ import absolute_import
+import random
+import string
+
+
+class User(object):
+    u"""
+    Models an IRC user
+    """
+
+    def __init__(self, username = u"random"):
+        u"""
+        Initializes the User
+
+        :param username: the user's username. If left empty, or the string 'random' is passed, a random
+                         username consisting only of ASCII characters will be generated as the username
+                         An empty string will also result in a random username
+        """
+        if username == u"random" or username == u"":
+            self.username = self.generate_random_username()
+        else:
+            self.username = username
+
+    def get_name(self):
+        u"""
+        :return: The user's username
+        """
+        return self.username
+
+    @staticmethod
+    def generate_random_username(length = 10):
+        u"""
+        Generates a random username of given length
+
+        :param length: The length of the username
+        :return:       The random username
+        """
+        return u"".join(random.choice(string.ascii_uppercase) for _ in xrange(length))
