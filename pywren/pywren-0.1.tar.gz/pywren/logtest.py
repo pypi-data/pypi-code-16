@@ -1,0 +1,1 @@
+wren.log_test()
