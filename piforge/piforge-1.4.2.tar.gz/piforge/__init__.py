@@ -1,0 +1,2 @@
+def someFunction():
+	return True
