@@ -1,0 +1,17 @@
+
+
+from setuptools import setup, find_packages
+
+setup(
+    name='eleme.openapi.sdk',
+    version='0.0.1.12',
+    keywords=('eleme', 'openapi'),
+    #long_description=open('README.md').read(),
+    description='eleme openapi python sdk',
+    license='MIT License',
+    packages=find_packages(),
+    #install_requires=['web>=0.38'],
+    author='david',
+    author_email='pengfei.zhu@ele.me',
+)
+
