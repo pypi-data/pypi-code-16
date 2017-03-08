@@ -1,0 +1,1 @@
+default_app_config = 'report_system.apps.ReportSystemConfig'
