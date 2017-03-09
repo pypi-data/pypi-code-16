@@ -1,0 +1,100 @@
+#!/usr/bin/env python
+
+"""
+A Canvas stimulus.
+
+This module contains a class implementing a canvas stimulus.
+
+"""
+from __future__ import absolute_import, print_function, division
+from builtins import *
+
+__author__ = 'Florian Krause <florian@expyriment.org>, \
+Oliver Lindemann <oliver@expyriment.org>'
+__version__ = '0.9.0'
+__revision__ = 'c4963ac'
+__date__ = 'Thu Mar 9 13:48:59 2017 +0100'
+
+
+import pygame
+
+from . import defaults
+from ._visual import Visual
+
+
+class Canvas(Visual):
+    """A class implementing a canvas stimulus."""
+
+    def __init__(self, size, position=None, colour=None):
+        """Create a canvas.
+
+        Parameters
+        ----------
+        size : (int, int)
+            size of the canvas (int,int)
+        position : (int, int), optional
+            position of the stimulus
+        colour : (int,int,int), optional
+            colour of the canvas stimulus
+
+        """
+
+        if position is None:
+            position = defaults.canvas_position
+        Visual.__init__(self, position)
+        self._size = size
+        if colour is not None:
+            self._colour = colour
+        else:
+            self._colour = defaults.canvas_colour
+
+    _getter_exception_message = "Cannot set {0} if surface exists!"
+
+    @property
+    def size(self):
+        """Getter for size."""
+        return self._size
+
+    @size.setter
+    def size(self, value):
+        """Setter for size."""
+
+        if self.has__surface:
+            raise AttributeError(Canvas._getter_exception_message.format(
+                "size"))
+        else:
+            self._size = value
+
+    @property
+    def colour(self):
+        """Getter for colour."""
+        return self._colour
+
+    @colour.setter
+    def colour(self, value):
+        """Setter for colour."""
+
+        if self.has__surface:
+            raise AttributeError(Canvas._getter_exception_message.format(
+                "colour"))
+        else:
+            self._colour = value
+
+    def _create_surface(self):
+        """Create the surface of the stimulus."""
+
+        surface = pygame.surface.Surface(self._size,
+                                         pygame.SRCALPHA).convert_alpha()
+        if self._colour is not None:
+            surface.fill(self._colour)
+        return surface
+
+
+if __name__ == "__main__":
+    from .. import control
+    control.set_develop_mode(True)
+    control.defaults.event_logging = 0
+    exp = control.initialize()
+    cnvs = Canvas((200, 200), colour=(255, 255, 255))
+    cnvs.present()
+    exp.clock.wait(1000)

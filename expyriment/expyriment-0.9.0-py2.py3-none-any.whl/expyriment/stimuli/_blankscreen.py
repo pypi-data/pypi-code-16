@@ -1,0 +1,57 @@
+#!/usr/bin/env python
+
+"""
+A blank screen stimulus.
+
+This module contains a class implementing a blank screen stimulus.
+
+"""
+from __future__ import absolute_import, print_function, division
+from builtins import *
+
+__author__ = 'Florian Krause <florian@expyriment.org>, \
+Oliver Lindemann <oliver@expyriment.org>'
+__version__ = '0.9.0'
+__revision__ = 'c4963ac'
+__date__ = 'Thu Mar 9 13:48:59 2017 +0100'
+
+
+from ._canvas import Canvas
+from .. import _internals
+
+class BlankScreen(Canvas):
+    """A class implementing a blank screen."""
+
+    def __init__(self, colour=None):
+        """Create a blank screen.
+
+        Parameters
+        ----------
+        colour : (int,int,int), optional
+            colour of the blank screen
+        """
+
+        if colour is not None:
+            self._colour = colour
+        else:
+            self._colour = _internals.active_exp.background_colour
+        try:
+            size = _internals.active_exp.screen.surface.get_size()
+        except:
+            raise RuntimeError("Could not get size of screen!")
+        Canvas.__init__(self, size, colour=self._colour)
+
+
+    @staticmethod
+    def _test():
+        from .. import control
+        control.set_develop_mode(True)
+        control.defaults.event_logging.event_logging = 0
+        exp = control.initialize()
+        blankscreen = BlankScreen()
+        blankscreen.present()
+        exp.clock.wait(1000)
+
+
+if __name__ == "__main__":
+    BlankScreen._test()
