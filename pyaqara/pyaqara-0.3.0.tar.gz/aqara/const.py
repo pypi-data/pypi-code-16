@@ -1,0 +1,18 @@
+"""Constants of the aqara protocol"""
+
+MCAST_ADDR = "224.0.0.50"
+MCAST_PORT = 4321
+
+LISTEN_IP = "0.0.0.0"
+LISTEN_PORT = 9898
+
+GATEWAY_PORT = 9898
+
+AQARA_DEVICE_HT = 'sensor_ht'
+AQARA_DEVICE_MOTION = 'motion'
+AQARA_DEVICE_MAGNET = 'magnet'
+AQARA_DEVICE_SWITCH = 'switch'
+
+AQARA_SWITCH_ACTION_CLICK = 'click'
+AQARA_SWITCH_ACTION_DOUBLE_CLICK = 'double_click'
+AQARA_SWITCH_ACTION_LONG_CLICK_PRESS = 'long_click_press'
