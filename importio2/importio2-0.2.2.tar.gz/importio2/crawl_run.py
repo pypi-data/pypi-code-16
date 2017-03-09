@@ -1,0 +1,111 @@
+#
+# Copyright 2017 Import.io
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+import os
+import importio2.apicore as apicore
+import requests
+import logging
+from datetime import datetime
+from dateutil import parser
+
+logger = logging.getLogger(__name__)
+#logging.basicConfig(level=logging.DEBUG)
+
+
+class CrawlRunAPI(object):
+    def __init__(self):
+        self._api_key = os.environ['IMPORT_IO_API_KEY']
+
+    @staticmethod
+    def _parse_datetime(dt):
+        if isinstance(dt, datetime):
+            ts = int(dt.strftime('%s')) * 1000
+        elif isinstance(dt, str):
+            ts = parser.parse(dt)
+        else:
+            ts = dt
+        return ts
+
+    def create(self,
+               extractor_id,
+               failed_url_count,
+               success_url_count,
+               total_url_count,
+               row_count,
+               started_at,
+               stopped_at,
+               state='FINISHED'):
+        """
+        Creates a Crawl Run in an extractor
+        :param extractor_id: Extractor to create the crawl run
+        :param failed_url_count: Number of failed URLs in the run
+        :param success_url_count: Number of Success URLs in the run
+        :param total_url_count: Total number of URLs in the run
+        :param row_count: Total rows returned by the run
+        :param started_at: Time when run began
+        :param stopped_at: Time when run finished
+        :param state: Final state
+        :return: crawl run id
+        """
+        data = {
+            'extractorId': extractor_id,
+            'failedUrlCount': failed_url_count,
+            'successUrlCount': success_url_count,
+            'totalUrlCount': total_url_count,
+            'rowCount': row_count,
+            'startedAt': CrawlRunAPI._parse_datetime(started_at),
+            'stoppedAt': CrawlRunAPI._parse_datetime(stopped_at),
+            'state': state
+        }
+        response = apicore.object_store_create(self._api_key, 'crawlRun', data)
+        response.raise_for_status()
+        crawl_run_id = None
+        if response.status_code == requests.codes.created:
+            result = response.json()
+            logger.info(result)
+            crawl_run_id = result['guid']
+
+        return crawl_run_id
+
+    def _attachment(self, crawl_run_id, object_type, contents, field, mime):
+            if os.path.exists(contents):
+                with open(contents) as f:
+                    logger.info("Reading contents of: {0}".format(contents))
+                    attachment_contents = f.read()
+            else:
+                attachment_contents = contents
+            logger.info("attachment_contents: {0}".format(attachment_contents))
+            response = apicore.object_store_put_attachment(self._api_key,
+                                                           object_type,
+                                                           crawl_run_id,
+                                                           field,
+                                                           attachment_contents.encode('utf-8'),
+                                                           mime)
+
+            attachment_id = None
+            if response.status_code == requests.codes.ok:
+                result = response.json()
+                attachment_id = result['guid']
+
+            return attachment_id
+
+    def json_attachment(self, crawl_run_id, contents):
+
+        return self._attachment(crawl_run_id=crawl_run_id, object_type='crawlrun', contents=contents,
+                                field='json', mime='application/x-ldjson')
+
+    def csv_attachment(self, crawl_run_id, contents):
+        return self._attachment(crawl_run_id=crawl_run_id, object_type='crawlrun', contents=contents,
+                                field='csv', mime='text/csv')
