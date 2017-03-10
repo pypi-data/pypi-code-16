@@ -1,0 +1,4 @@
+
+class SubProcessError(Exception):
+    pass
+
