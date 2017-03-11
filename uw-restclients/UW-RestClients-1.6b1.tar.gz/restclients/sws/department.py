@@ -1,0 +1,1 @@
+from uw_sws.department import get_departments_by_college
