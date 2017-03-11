@@ -1,0 +1,4 @@
+
+
+class CanonicalError(Exception):
+    pass
