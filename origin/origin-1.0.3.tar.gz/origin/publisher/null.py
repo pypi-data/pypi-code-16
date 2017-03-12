@@ -1,0 +1,17 @@
+from origin.publisher.base import BaseEventPublisher
+
+
+class NullEventPublisher(BaseEventPublisher):
+    """An implementation of the :class:`BaseEventPublisher`
+    interface that does not transmit events. Use for
+    mocking and prototyping purposes.
+    """
+
+    def publish(self, *args, **kwargs):
+        pass
+
+    def start(self, *args, **kwargs):
+        pass
+
+    def stop(self, *args, **kwargs):
+        pass
