@@ -1,0 +1,7 @@
+MATLAB_PARAMETER_FILENAME = 'p.mat'
+MATLAB_F_FILENAME = 'f.mat'
+MATLAB_DF_FILENAME = 'df.mat'
+NODES_MAX_FILENAME = 'max_nodes.txt'
+
+COST_FUNCTION_NAMES = ('OLS', 'WLS', 'GLS', 'LOLS', 'LWLS', 'LGLS')
+
