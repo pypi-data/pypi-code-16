@@ -1,0 +1,25 @@
+
+#MICROSOFT BOT FRAMEWORK
+export MICROSOFT_APP_ID='86fefd36-6cec-434c-88b3-64cebd95e2fd'
+export MICROSOFT_APP_PASSWORD='eASG2jrJ7YLNYM9233aHPpC'
+
+# LUIS APP
+export LUIS_APP_ID='2409f551-1b2a-4172-a664-5f04021b9c00'
+export LUIS_ENDPOINT_KEY='eff6bf355abc4a3ea23cdacc1a018161'
+
+
+# SERVICE PLATFORM
+export SERVICE='skype'
+
+
+# # LUIS_ENDPOINT = 'https://luis-actions.cloudapp.net/api/v1/botframework?app-id=60242317-c957-436f-b12d-f46b72050a50&subscription-key=18d6ced7ed1049098e6ebbdd6b031eb7'
+# export LUIS_APP_ID='2409f551-1b2a-4172-a664-5f04021b9c00'
+# export LUIS_ENDPOINT_KEY='eff6bf355abc4a3ea23cdacc1a018161'
+
+
+
+# NEW!!!
+
+#MICROSOFT BOT FRAMEWORK
+export MICROSOFT_APP_ID='0da76fcc-633a-45b2-9bb2-46a74b25f1bc'
+export MICROSOFT_APP_PASSWORD='6vmAdKhcJU6mPQTgML9JdcX'
