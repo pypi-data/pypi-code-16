@@ -1,0 +1,2 @@
+VALIDATOR_NICK_LIST = ['compare']
+COMPARATOR_NICK_LIST = ['xpath']
