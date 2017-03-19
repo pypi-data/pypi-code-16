@@ -1,0 +1,7 @@
+TELEGRAM = {
+    "TOKEN": "TOKEN",
+    "TELESOCKET_TOKEN": "TOKEN",
+    "TELESOCKET_MANAGER": False,
+    "SKIP_PENDING": True,
+    "ROOT_UID": 1234567,
+}
