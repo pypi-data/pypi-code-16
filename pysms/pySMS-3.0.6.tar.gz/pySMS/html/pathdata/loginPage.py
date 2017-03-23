@@ -1,0 +1,4 @@
+url = 'http://www.zimmersms.com'
+username = 'body > div:nth-child(8) > div:nth-child(2) > div > div:nth-child(2) > div > div:nth-child(3) > div > div:nth-child(2) > div > div:nth-child(2) > div > table > tbody > tr > td > table > tbody > tr > td > div.GKCQ-U1BOPI > table > tbody > tr:nth-child(2) > td.GKCQ-U1BDS > input'
+password = 'body > div:nth-child(8) > div:nth-child(2) > div > div:nth-child(2) > div > div:nth-child(3) > div > div:nth-child(2) > div > div:nth-child(2) > div > table > tbody > tr > td > table > tbody > tr > td > div.GKCQ-U1BOPI > table > tbody > tr:nth-child(3) > td.GKCQ-U1BDS > input'
+loginbutton = 'body > div:nth-child(8) > div:nth-child(2) > div > div:nth-child(2) > div > div:nth-child(3) > div > div:nth-child(2) > div > div:nth-child(2) > div > table > tbody > tr > td > table > tbody > tr > td > div.GKCQ-U1BOPI > table > tbody > tr:nth-child(5) > td > table > tbody > tr > td > span > div > div.GKCQ-U1BN4C.GKCQ-U1BK4C'
