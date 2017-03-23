@@ -1,0 +1,13 @@
+"""这是一个print_lol.py模块，提供了print_lol函数，这个函数作用是打印列表，其中有可能包含（也有可能不包含）嵌套列表。"""
+def print_lol(the_list,indent = False, level = 0):
+        """这个函数取一个位置参数，名为the_list，这可以是任何python列表（也可以是包含嵌套列表的列表），所指定的列表中的每个数据项递归的输出到屏幕上，各个数据占一行.
+           第二个参数为level，用来在遇到嵌套列表时，插入制表符
+           第三个参数indent来控制何时需要插入制表符"""	
+        for each_items in the_list:
+                 if isinstance(each_items, list):
+                        print_lol(each_items, indent, level + 1)
+                 else:
+                        if indent:
+                                for tab_stop in range(level):
+                                        print("\t",end = '')
+                        print(each_items)
