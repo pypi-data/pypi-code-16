@@ -1,0 +1,1 @@
+from meteosuisse import DigimatDailyDataFile
