@@ -1,0 +1,43 @@
+#
+#	Install it with:
+#		python setup.py build_ext --inplace
+#
+from setuptools import setup, find_packages
+from setuptools.extension import Extension
+from os import path
+from codecs import open
+#$from distutils.core import setup, Extension
+from Cython.Build import cythonize
+import numpy as np
+
+
+here = path.abspath(path.dirname(__file__))
+
+# Get the long description from the README file
+with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
+    long_description = f.read()
+
+
+include_dirs = [np.get_include()]
+
+extensions = [
+		Extension("PyNAFF.PyNAFF", ["PyNAFF/PyNAFF.pyx"], include_dirs=include_dirs),
+			]
+
+setup(
+    name = "PyNAFF",
+    version = '1.0.0b3',
+    description = 'A Python module that implements NAFF algorithm',
+    long_description = long_description,
+    # projects main page
+    url='https://github.com/nkarast/PyNAFF',
+    # Author details
+    author='Nikos Karastathis',
+    author_email='nkarast@gmail.com',
+    # licence
+    licence = 'GPLv3',
+    keywords = "naff numerical analysis frequency fundamental",
+    install_requires=['cython','numpy'],
+    packages = find_packages(),
+    ext_modules = cythonize(extensions),
+)
