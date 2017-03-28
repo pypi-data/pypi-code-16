@@ -1,0 +1,11 @@
+import os
+import sys
+
+def print_list(the_list,indent=False,level=0,fh=sys.stdout):
+    for each_item in the_list:
+        if isinstance(each_item, list):
+            print_list(each_time,indent,level+1,fh)
+        else:
+            for count in range(level):
+                print('\t', end='', file=fh)
+        print(each_item,file=fh)
