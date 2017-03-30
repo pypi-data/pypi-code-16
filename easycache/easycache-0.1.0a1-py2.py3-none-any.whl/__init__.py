@@ -1,0 +1,1 @@
+from easyCache import cacheFunction, EasyCache
